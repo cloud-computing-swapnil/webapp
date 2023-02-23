@@ -38,7 +38,7 @@ echo "$(npm --version) is the version of npm"
  
 
  cd /home/ec2-user/webApp
- cd webApp
+ # cd webApp
 
 # sudo cp /tmp/webApp.zip .
 # unzip ./webApp.zip

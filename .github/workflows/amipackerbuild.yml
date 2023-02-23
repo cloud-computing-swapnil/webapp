@@ -1,0 +1,47 @@
+name: Build the Packer AMI Template
+
+env:
+  AWS_REGION: us-east-1
+
+on:
+  push:
+    branches: [main]
+jobs:
+  packer_init_validate_build:
+    runs-on: ubuntu-latest
+    name: Build AWS Custom AMI with Node Application artifacts
+    steps: 
+      - name: Step 1 - Checkout code from branch
+        uses: actions/checkout@v2
+
+      - name: Step 2 - zip all the webApp files
+        run: |
+          zip -r webApp.zip ./
+          pwd ./webApp
+      
+      - name: Step 3 - Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.ACCESS_SECRET }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Step 4 - Packer Init
+        uses: hashicorp/packer-github-actions@master
+        with:
+          command: init
+          target: project.pkr.hcl
+
+      - name: Step 5 - Validate Packer Template
+        uses: hashicorp/packer-github-actions@master
+        with:
+          command: validate
+          arguments: -syntax-only
+          target: project.pkr.hcl
+
+      - name: Step 6 - Build Artifacts and create Custom AMI from Packer Build
+        uses: hashicorp/packer-github-actions@master
+        with:
+          command: build
+          arguments: "-color=false -on-error=abort"
+          target: project.pkr.hcl

@@ -4,7 +4,7 @@ After=cloud-final.service 
 
 [Service]
 WorkingDirectory=/home/ec2-user/webApp/webApp
-ExecStart=/usr/bin/node /home/ec2-user/webApp/webApp/app.js
+ExecStart=/usr/bin/node /home/ec2-user/webApp/app.js
 Restart=always
 RestartSec=10
 StandardOutput=syslog
