@@ -20,6 +20,7 @@ variable "Secret_Access_Key" {
 }
 source "amazon-ebs" "Linux_Machine" {
   profile  = "dev"
+  ami_users = ["638842484270"]
   ami_name = "CUSTOMIZE_AMI${local.timestamp}"
 
   access_key=var.Access_key_ID

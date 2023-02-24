@@ -27,13 +27,13 @@ echo "$(npm --version) is the version of npm"
 
  echo "Installing unzip"
  sudo yum install unzip -y
- cd /home/ec2-user/webApp
+mkdir webApp
 
- mkdir webApp
- sudo cp /tmp/webApp.zip /home/ec2-user/webApp/webApp.zip
+ 
+ sudo cp /tmp/webApp.zip /home/ec2-user/webApp.zip
  pwd
  ls
- unzip /home/ec2-user/webApp/webApp.zip -d /home/ec2-user/webApp
+ unzip /home/ec2-user/webApp.zip -d /home/ec2-user/webApp
  ls
  
 
