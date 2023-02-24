@@ -1,0 +1,48 @@
+name: Node.js CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [19.x]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm ci
+      - run: npm run build --if-present
+      - run: npm test
+      
+  packer_init_validate:
+    runs-on: ubuntu-latest
+    name: Validate Packer for the AMI Build
+    steps: 
+      - name: Step 1 - Checkout code from branch
+        uses: actions/checkout@v2
+
+      - name: Step 2 - zip all the webService files
+        run: |
+          zip -r webApp.zip ./
+          pwd ./webApp
+      - name: Step 3 - Packer Init
+        uses: hashicorp/packer-github-actions@master
+        with:
+          command: init
+          target: ami-package.pkr.hcl
+
+      - name: Step 4 - Validate Packer Template
+        uses: hashicorp/packer-github-actions@master
+        with:
+          command: validate
+          target: ami-package.pkr.hcl
