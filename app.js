@@ -12,6 +12,7 @@ const multer  = require('multer')
 const uuid = require('uuid');
 const crypto = require('crypto');
 const sharp = require('sharp');
+const { fileURLToPath } = require('url');
 const storage = multer.memoryStorage()
 const upload = multer({ storage: storage })
 
@@ -76,7 +77,7 @@ app.post('/v1/users', async (req, res) => {
 })
 
 //FETCHING USER INFORMATION
-app.get('/v1/users/:id',auth ,async (req, res) => {
+app.get('/v1/user/:id',auth ,async (req, res) => {
   if (req.params.id){
         if (req.response.id !== parseInt(req.params.id)) {
             return res.status(403).json({
@@ -105,7 +106,7 @@ app.get('/v1/users/:id',auth ,async (req, res) => {
 
 
 //UPDATING USER
-app.put('/v1/users/:id',auth, async (req, res) => {
+app.put('/v1/user/:id',auth, async (req, res) => {
   if (req.params.id){
     if (req.response.id !== parseInt(req.params.id)) {
         return res.status(403).json({
@@ -365,13 +366,11 @@ app.delete('/v1/product/:id', auth, async (req, res) => {
 
 
 const bucketName = process.env.BUCKET_NAME
-const region = process.env.BUCKET_REGION
 const accessKeyId = process.env.ACCESS_KEY
 const secretAccessKey = process.env.SECRET_ACCESS
 
 // Set up AWS S3 configuration
-const s3 = new S3Client({
-  region,
+const s3 = new AWS.S3({
   credentials: {
     accessKeyId,
     secretAccessKey
@@ -396,25 +395,21 @@ app.post('/v1/product/:id/image',upload.single('file'),auth,async(req, res) => {
       error: "The file type is not supported",
     });
   }
-  const fileBuffer = await sharp(file.buffer)
-    .resize({ height: 1920, width: 1080, fit: "contain" })
-    .toBuffer() 
   const fileName = generateFileName()
   const uploadParams = {
     Bucket: bucketName,
-    Body: fileBuffer,
+    Body: file.buffer,
     Key: fileName,
-    ContentType:file.mimetype
   }
   // Send the upload to S3
   
-  await s3.send(new PutObjectCommand(uploadParams));
+  const data = await s3.upload(uploadParams).promise();
   const s3BucketPath = `s3://${bucketName}`;
   const image = await Image.create({
     product_id:req.params.id,
     file_name:fileName,
     date_created:new Date(),
-    s3_bucket_path:s3BucketPath,
+    s3_bucket_path:data.Location,
   })
   let result = await image.save();
   return res.status(201).send(result);
@@ -455,7 +450,7 @@ app.delete('/v1/product/:id/image/:image_id', auth, async (req, res) => {
   }
   try {
     await image.destroy();
-    await s3.send(new DeleteObjectCommand(deleteParams));
+    const data = await s3.deleteObject(deleteParams).promise();
     return res.status(204).send();
   } catch (err) {
     console.log(err);
