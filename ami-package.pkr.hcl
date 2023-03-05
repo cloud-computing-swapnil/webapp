@@ -10,21 +10,23 @@ locals {
   timestamp = regex_replace(timestamp(), "[- TZ:]", "")
 }
 
-variable "Access_key_ID" {
- default = "AKIAULUAJIBU74KNSGG3"
+variable "ACCESS_KEY" {
  type = string
 }
-variable "Secret_Access_Key" {
- default = "ll69C8789ZcbjqkP4Wypl+2UOa5eWytN2h0P/3hE"
+variable "ACCESS_SECRET" {
  type = string
+}
+variable "demoAccountID"{
+  type = string
+  default = "638842484270"
 }
 source "amazon-ebs" "Linux_Machine" {
   profile  = "dev"
-  ami_users = ["638842484270"]
+  ami_users = ["${var.demoAccountID}"]
   ami_name = "CUSTOMIZE_AMI${local.timestamp}"
 
-  access_key=var.Access_key_ID
-  secret_key=var.Secret_Access_Key
+  access_key={{var.ACCESS_KEY}}
+  secret_key={{var.ACCESS_SECRET}}
   
 
   source_ami_filter {
