@@ -1,9 +1,21 @@
-const { sequelize,User,Product} = require('./models')
+const { sequelize,User,Product,Image} = require('./models')
 const express = require('express')
 const app = express()
 app.use(express.json())
 const bcrypt = require('bcrypt');
 const auth=require('./auth/auth')
+const bodyParser = require('body-parser');
+const { S3Client,PutObjectCommand,DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const AWS = require('aws-sdk');
+require('dotenv').config()
+const multer  = require('multer')
+const uuid = require('uuid');
+const crypto = require('crypto');
+const sharp = require('sharp');
+const { fileURLToPath } = require('url');
+const storage = multer.memoryStorage()
+const upload = multer({ storage: storage })
+
 
 app.get('/healthz', async (req, res) => {
   res.sendStatus(200);
@@ -14,30 +26,34 @@ app.post('/v1/users', async (req, res) => {
   const { first_name, username, last_name,password } = req.body
 
   try {
+  //email should be valid
    const emailRegex =/^[a-zA-Z0-9.!#$%&'+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)$/
    if (!emailRegex.test(username)){
-    return res.status(400).json({ error: 'Enter your Email IN valid format' })
+    return res.status(400).json({ error: 'Enter your Email ID in correct format. Example: abc@xyz.com' })
    }
-    // ID VALIDATION
+    // Validation for ID
   if (req.body.id){
-    return res.status(400).json({ error: 'Invalid request body for user object' })
+    return res.status(400).json({ error: 'Invalid request body for user object: ID cannot be provided by the user' })
   }
 
-
-  if (!username || !password || !first_name || !last_name)
+  //All four fields should be present
+  if (!username ||
+    !password ||
+    !first_name ||
+    !last_name)
     {
-      return res.status(400).json({ error: 'All fields are required in the request body' })
+      return res.status(400).json({ error: 'username, password, first_name, last_name fields are required in the request body' })
     }
   
-    const getUserInfo = await User.findOne({
+    const getUser = await User.findOne({
       where: {
           username: username,
       },
   }).catch((err) => {
-    return res.status(500).json({ error: 'Error while creating the user' })
+    return res.status(500).json({ error: 'Some error occurred while creating the user' })
   })
-  if (getUserInfo) {
-    return res.status(400).json({ error: 'Please provide another address' })
+  if (getUser) {
+    return res.status(400).json({ error: 'User already exists!,Please try a different email address' })
   }
   else{
     const salt = await bcrypt.genSalt(10);
@@ -56,12 +72,12 @@ app.post('/v1/users', async (req, res) => {
 }
   } catch (err) {
     console.log(err)
-    return res.status(500).json({ error: ' problem occurred while trying to create the user account..' })
+    return res.status(500).json({ error: 'Some error occurred while creating the user' })
   }
 })
 
 //FETCHING USER INFORMATION
-app.get('/v1/users/:id',auth ,async (req, res) => {
+app.get('/v1/user/:id',auth ,async (req, res) => {
   if (req.params.id){
         if (req.response.id !== parseInt(req.params.id)) {
             return res.status(403).json({
@@ -90,7 +106,7 @@ app.get('/v1/users/:id',auth ,async (req, res) => {
 
 
 //UPDATING USER
-app.put('/v1/users/:id',auth, async (req, res) => {
+app.put('/v1/user/:id',auth, async (req, res) => {
   if (req.params.id){
     if (req.response.id !== parseInt(req.params.id)) {
         return res.status(403).json({
@@ -103,39 +119,41 @@ app.put('/v1/users/:id',auth, async (req, res) => {
     
     try {
       
-      
+      // req.body is empty
       if (!req.body) {
-        return res.status(400).json({ error: 'The request must contain some information and cannot be empty..' })
+        return res.status(400).json({ error: 'Request body cant empty' })
       }
 
-      
+      // req.body is present but doesn't have any of
+      // first_name, last_name, password, username
       if (!req.body.first_name && !req.body.last_name && !req.body.password && !req.body.username) 
       {
-        return res.status(400).json({ error: 'The request content is missing either the first name, last name, or password field ' })
+        return res.status(400).json({ error: 'Request body doesnt have any of first_name, last_name, password' })
       }
-      
+      // if user_id is not present in the request
       const id = req.params.id;
       if (!id) 
       {
-        return res.status(400).json({ error: 'The user ID is missing from the request.' })
+        return res.status(400).json({ error: 'User id is not present in the request' })
       }
-       
+       // check if account_created_at is present in the request body
     if (req.body.account_created) {
-        return res.status(400).json({ error: 'The account creation date cannot be altered.' })
+        return res.status(400).json({ error: 'account_created cant be updated' })
     }
-    
+    // check if account_updated_at is present in the request body
     if (req.body.account_updated) {
       return res.status(400).json({ error: 'account_updated cant be updated' })
     }
 
     var DBUserObj = await User.findByPk(id);
-       
+        // check if username is present in the request body
+        // if present, verify it matches the username in the db
         if (req.body.username) {
             if (DBUserObj.username !== req.body.username) {
               return res.status(400).json({ error: 'Username cant be updated' })
             }
         }
-        
+        // check if id is present in the request body and if it matches the id in the request
         if (req.body.id) {
             if (DBUserObj.id !== req.body.id) {
               return res.status(400).json({ error: 'ID cant be updated' })
@@ -162,26 +180,30 @@ app.put('/v1/users/:id',auth, async (req, res) => {
 
 
 
-//POSTING PRODUCT INFO
+//Posting Product Information
   app.post('/v1/product',auth, async(req,res)=>{
     try{
     const owner_user_id=req.response.id
     const { name, description,sku,manufacturer,quantity } = req.body
 
-  
+  // Validation for ID
   if (req.body.id){
     return res.status(400).json({ error: 'Invalid request body for user object: ID cannot be provided by the user' })
   }
-  
+  //Validation for date_added,date_last_updated and owner_user_id
   if(req.body.owner_user_id || req.body.date_added || req.body.date_last_updated ){
     return res.status(400).json({ error: 'These properties cant be provided by the user' })
   }
-
+  //Validation for quantity
   if (quantity < 0 || quantity >100 || typeof req.body.quantity === 'string'){
     return res.status(400).json({ error: 'Quantity should be between 0 and 100 and it shouldnt be string' })
   }
-  
-if (!name || !description || !sku ||  !manufacturer || !quantity)
+  //All four fields should be present
+if (!name ||
+    !description ||
+    !sku ||
+    !manufacturer ||
+    !quantity)
     {
       return res.status(400).json({ error: 'Name, description,sku,manufacturer,quantity fields are required in the request body' })
     }
@@ -207,7 +229,7 @@ if (!name || !description || !sku ||  !manufacturer || !quantity)
    })
   
 
-//UPDATING PATCH INFORMATION
+//UPDATING Product Information---PATCH
 app.patch('/v1/product/:id', auth, async (req, res) => {
   const id=req.params.id;
   const product = await Product.findOne({ where: { id } })
@@ -225,28 +247,19 @@ app.patch('/v1/product/:id', auth, async (req, res) => {
   product.quantity = quantity;
   
   try {
-  
+  // Validation for ID
   if (req.body.id){
     return res.status(400).json({ error: 'Invalid request body for user object: ID cannot be provided by the user' })
   }
-  
+  //Validation for date_added,date_last_updated and owner_user_id
   if(req.body.owner_user_id || req.body.date_added || req.body.date_last_updated ){
     return res.status(400).json({ error: 'These properties cant be provided by the user' })
   }
-  
+  //Validation for quantity
   if (quantity < 0 || quantity >100 || typeof req.body.quantity === 'string'){
-    return res.status(400).json({ error: 'Quantity should be between 0 and 100 and it should not be string' })
+    return res.status(400).json({ error: 'Quantity should be between 0 and 100 and it shouldnt be string' })
   }
-if(sku){
-  const getProduct = await Product.findOne({
-    where: {
-        sku: sku,
-    },
-})
-if (getProduct!==null) {
-  return res.status(400).json({ error: 'Sku already exists!,Please try a different SKU No' })
-}
-}
+
 
   await Product.update({ ...req.body },{where: {id},});
     // await product.update(req.body,);
@@ -256,27 +269,7 @@ if (getProduct!==null) {
   }
 });
 
-////DELETING PRODUCT INFO
-app.delete('/v1/product/:id', auth, async (req, res) => {
-  try {
-    const id=req.params.id;
-    const product = await Product.findOne({ where: { id } })
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-   
-    if (product.owner_user_id !== req.response.id) {
-      return res.status(401).json({ message: 'Not authorized to delete this product' });
-    }
-    
-    await product.destroy();
-    return res.status(204).json()
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-//UPDATING PUT INFORMATION
+//UPDATING Product Information--PUT
 app.put('/v1/product/:id', auth, async (req, res) => {
   const id=req.params.id;
   const product = await Product.findOne({ where: { id } })
@@ -294,41 +287,56 @@ app.put('/v1/product/:id', auth, async (req, res) => {
   product.quantity = quantity;
   
   try {
-  
+  // Validation for ID
   if (req.body.id){
-    return res.status(400).json({ error: 'The request content is invalid for creating a user object, as the ID cannot be specified by the user.' })  }
-  
+    return res.status(400).json({ error: 'Invalid request body for user object: ID cannot be provided by the user' })
+  }
+  //Validation for date_added,date_last_updated and owner_user_id
   if(req.body.owner_user_id || req.body.date_added || req.body.date_last_updated ){
-    return res.status(400).json({ error: 'These properties cannot be provided by the user' })
+    return res.status(400).json({ error: 'These properties cant be provided by the user' })
   }
- 
+  //Validation for quantity
   if (quantity < 0 || quantity >100 || typeof req.body.quantity === 'string'){
-    return res.status(400).json({ error: 'Quantity should not be a string' })
+    return res.status(400).json({ error: 'Quantity should be between 0 and 100 and it shouldnt be string' })
   }
-
+//All four fields should be present
  if (!name ||
-  !description || !sku || !manufacturer || !quantity)
+  !description ||
+  !sku ||
+  !manufacturer ||
+  !quantity)
   {
-    return res.status(400).json({ error: 'The request must include the name, description, SKU number, manufacturer, and quantity fields.' })
+    return res.status(400).json({ error: 'Name, description,sku,manufacturer,quantity fields are required in the request body' })
   }
-  const getProduct = await Product.findOne({
-    where: {
-        sku: sku,
-    },
-})
 
-if (getProduct) {
-  return res.status(400).json({ error: 'The SKU number already exists. Please choose a different SKU number.' })
-}
-else{
     await product.save();
     return res.status(204).json()
-  } 
 }  catch (error) {
     res.status(400).send(error);
   }
 });
 
+
+
+////Deleting Product Information
+app.delete('/v1/product/:id', auth, async (req, res) => {
+  try {
+    const id=req.params.id;
+    const product = await Product.findOne({ where: { id } })
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+    // Check if the user who added the product is making the request
+    if (product.owner_user_id !== req.response.id) {
+      return res.status(401).json({ message: 'Not authorized to delete this product' });
+    }
+    // Delete the product
+    await product.destroy();
+    return res.status(204).json()
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
   
 
 //GET PRODUCTS
@@ -355,7 +363,188 @@ else{
 
 
 
-//Listen 
+
+
+const bucketName = process.env.BUCKET_NAME
+const accessKeyId = process.env.ACCESS_KEY
+const secretAccessKey = process.env.SECRET_ACCESS
+
+// Set up AWS S3 configuration
+const s3 = new AWS.S3({
+  credentials: {
+    accessKeyId,
+    secretAccessKey
+  }
+})
+const generateFileName = (bytes = 32) => crypto.randomBytes(bytes).toString('hex')
+
+
+app.post('/v1/product/:id/image',upload.single('file'),auth,async(req, res) => {
+  const id=req.params.id;
+  const product = await Product.findOne({ where: { id } })
+  if (!product) return res.status(404).send('Product not found');
+  if (product.owner_user_id.toString() !== req.response.id.toString()) {
+    return res.status(401).json({
+      error: 'You are not authorized to post this image under this product',
+    });
+  }
+  
+  const file = req.file
+  if (!file.mimetype.startsWith("image/")) {
+    return res.status(400).json({
+      error: "The file type is not supported",
+    });
+  }
+  const fileName = generateFileName()
+  const uploadParams = {
+    Bucket: bucketName,
+    Body: file.buffer,
+    Key: fileName,
+  }
+  // Send the upload to S3
+  
+  const data = await s3.upload(uploadParams).promise();
+  const s3BucketPath = `s3://${bucketName}`;
+  const image = await Image.create({
+    product_id:req.params.id,
+    file_name:fileName,
+    date_created:new Date(),
+    s3_bucket_path:data.Location,
+  })
+  let result = await image.save();
+  return res.status(201).send(result);
+});
+
+//DELETING THE IMAGES
+app.delete('/v1/product/:id/image/:image_id', auth, async (req, res) => {
+  
+  const id=req.params.id;
+  const product = await Product.findOne({ where: { id } })
+  if (!product) return res.status(404).send('Product not found');
+  if (product.owner_user_id.toString() !== req.response.id.toString()) {
+    return res.status(401).json({
+      error: 'You are not authorized to delete this image under this product',
+    });
+  }
+
+  const image = await Image.findOne({
+    where: {
+      image_id: req.params.image_id,
+    },
+  });
+  if (!image) {
+    return res.status(404).json({
+      message: "No product image found",
+    });
+  }
+  
+  if (image.product_id!=id) {
+    return res.status(404).json({
+      message:'This image doesnt belong to this Product',
+    });
+  }
+  
+  const deleteParams = {
+    Bucket: bucketName,
+    Key: image.file_name,
+  }
+  try {
+    await image.destroy();
+    const data = await s3.deleteObject(deleteParams).promise();
+    return res.status(204).send();
+  } catch (err) {
+    console.log(err);
+    return res.status(500).send("Error deleting image from S3 bucket");
+  }
+});
+
+
+// Route to get details of a specific product image
+app.get('/v1/product/:id/image/:image_id',auth, async (req, res) => {
+  const id=req.params.id;
+  const product = await Product.findOne({ where: { id } })
+  if (req.params.id){
+    if (req.response.id !== parseInt(product.owner_user_id)) {
+        return res.status(403).json({
+            message: 'Forbidden Resource'
+        }),
+            console.log("User not match");
+    }
+}
+  if (!product) return res.status(404).send('Product not found');
+  if (product.owner_user_id.toString() !== req.response.id.toString()) {
+    return res.status(401).json({
+      error: 'You are not authorized to fetch this image under this product',
+    });
+  }
+
+  try {
+    console.log(req.params)
+    const image = await Image.findOne({
+      where: {
+        image_id: req.params.image_id,
+      },
+    });
+    if (!image) {
+      return res.status(404).json({
+        message: "No product image found",
+      });
+    }
+    if(image.product_id!=id){
+      return res.status(403).json({
+        message: "This product is not allowed to access other's image",
+      });
+    }
+    res.status(200).json(image);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Internal server error.');
+  }
+});
+
+
+
+// Route to get details of all product images
+app.get('/v1/product/:id/image', auth,async (req, res) => {
+  const id=req.params.id;
+  const product = await Product.findOne({ where: { id } })
+  console.log(product)
+  if (req.params.id){
+    if (req.response.id !== parseInt(product.owner_user_id)) {
+        return res.status(403).json({
+            message: 'Forbidden Resource'
+        }),
+            console.log("User not match");
+    }
+}
+  if (!product) return res.status(404).json({ message: "Product not found", });
+  if (product.owner_user_id.toString() !== req.response.id.toString()) {
+    return res.status(401).json({
+      error: 'You are not authorized to fetch this image under this product',
+    });
+  }
+
+  try {
+    const images = await Image.findAll({
+      where: {
+        product_id: req.params.id,
+      },
+    });
+    if (!images.length) {
+      return res.status(404).json({
+        message: "No product images found",
+      });
+    }
+
+    res.status(200).json(images);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Internal server error.');
+  }
+});
+
+
+//Listening 
 app.listen({ port: 8000 }, async () => {
   console.log('Server up on http://localhost:8000')
   await sequelize.authenticate()
@@ -365,3 +554,4 @@ app.listen({ port: 8000 }, async () => {
 })
 
 module.exports = app;
+
