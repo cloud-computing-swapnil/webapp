@@ -3,18 +3,18 @@
 sleep 30
 
 sudo yum update -y
-
+sudo yum upgrade -y
 
 
 sudo amazon-linux-extras enable postgresql14
-sudo yum install postgresql-server -y
-sudo postgresql-setup initdb
-sudo sed -i 's/ident/md5/g' /var/lib/pgsql/data/pg_hba.conf
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-sudo systemctl status postgresql
-sudo -u postgres psql
-sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'password123';"
+# sudo yum install postgresql-server -y
+# sudo postgresql-setup initdb
+# sudo sed -i 's/ident/md5/g' /var/lib/pgsql/data/pg_hba.conf
+# sudo systemctl start postgresql
+# sudo systemctl enable postgresql
+# sudo systemctl status postgresql
+# sudo -u postgres psql
+# sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'password123';"
 
 
 
