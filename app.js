@@ -366,15 +366,13 @@ app.delete('/v1/product/:id', auth, async (req, res) => {
 
 
 const bucketName = process.env.BUCKET_NAME
-const accessKeyId = process.env.ACCESS_KEY
-const secretAccessKey = process.env.SECRET_ACCESS
+const accessId = process.env.ACCESS_KEY
+const secretKey = process.env.SECRET_ACCESS
 
 // Set up AWS S3 configuration
 const s3 = new AWS.S3({
-  credentials: {
-    accessKeyId,
-    secretAccessKey
-  }
+    accessKeyId:accessId ,
+    secretAccessKey: secretKey
 })
 const generateFileName = (bytes = 32) => crypto.randomBytes(bytes).toString('hex')
 
