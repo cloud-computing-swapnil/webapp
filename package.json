@@ -24,6 +24,9 @@
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.28.0",
     "sharp": "^0.31.3",
-    "supertest": "^6.3.3"
+    "statsd-client": "^0.4.7",
+    "supertest": "^6.3.3",
+    "winston": "^3.8.2",
+    "winston-aws-cloudwatch": "^3.0.0"
   }
 }
