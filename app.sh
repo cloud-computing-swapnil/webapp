@@ -53,7 +53,7 @@ sudo cp /tmp/cloudwatch-config.json .
  sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
       -a fetch-config \
       -m ec2 \
-      -c file:/home/ec2-user/cloudwatch-config.json \
+      -c file:/home/ec2-user/webApp/cloudwatch-config.json \
       -s
 sudo mv /tmp/project.service /etc/systemd/system/project.service
 sudo systemctl enable project.service
