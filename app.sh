@@ -48,7 +48,7 @@ mkdir webApp
 echo "Installing AWS CloudWatch Agent"
 # sudo yum install -y aws-cfn-bootstrap
 sudo yum install -y amazon-cloudwatch-agent
-
+sudo cp /tmp/cloudwatch-config.json
 sudo mv /tmp/project.service /etc/systemd/system/project.service
 sudo systemctl enable project.service
 sudo systemctl start project.service
