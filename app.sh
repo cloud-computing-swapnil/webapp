@@ -55,9 +55,6 @@ sudo cp /tmp/cloudwatch-config.json .
       -m ec2 \
       -c file:/home/ec2-user/webApp/cloudwatch-config.json \
       -s
-
-
-
 sudo mv /tmp/project.service /etc/systemd/system/project.service
 sudo systemctl enable project.service
 sudo systemctl start project.service
