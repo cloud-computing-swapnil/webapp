@@ -35,6 +35,12 @@ app.get('/healthz', async (req, res) => {
   res.sendStatus(200);
 })
 
+app.get('/healthy', async (req, res) => {
+  // helper.logger.info("Healthz route hit!!");
+  // helper.statsdClient.increment('healthz',1);
+  res.sendStatus(200);
+})
+
 ///POSTING USER INFORMATION
 app.post('/v1/users', async (req, res) => {
   helper.logger.info("POST - User");
