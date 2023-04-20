@@ -62,11 +62,11 @@ jobs:
               aws ec2 create-launch-template-version --launch-template-id $TEMPLATE_ID --launch-template-data "ImageId=$latestAmi" --source-version 1 | grep LaunchTemplateVersionId | awk '{print $2}' | tr -d '",'
         env:
                AWS_REGION: us-east-1
-               TEMPLATE_ID: lt-09729b36caf23450b
+               TEMPLATE_ID: lt-00a18a9760b0cc913
       - name: Instance Refresh
 
         run: | 
               aws autoscaling start-instance-refresh --auto-scaling-group-name autoscaling_group --preferences '{"InstanceWarmup": 300, "MinHealthyPercentage": 50}'
         env:
                AWS_REGION: us-east-1
-               TEMPLATE_ID: lt-09729b36caf23450b
+               TEMPLATE_ID: lt-00a18a9760b0cc913
