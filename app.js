@@ -42,7 +42,7 @@ app.get('/healthy', async (req, res) => {
 })
 
 ///POSTING USER INFORMATION
-app.post('/v1/users', async (req, res) => {
+app.post('/v6/users', async (req, res) => {
   helper.logger.info("POST - User");
   helper.statsdClient.increment('POST_user',1);
   const {
